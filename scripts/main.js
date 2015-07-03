@@ -21399,6 +21399,49 @@ var RocketLauncher = function() {
     new SignalsView();
     new DescriptionView();
     new FeaturesView();
+
+    var $menu = $('.menu');
+    var limitShow = $('.signals').offset().top;
+
+    var showMenu = function() {
+      $menu.removeClass('unrevealed');
+    };
+
+    var hideMenu = function() {
+      $menu.addClass('unrevealed');
+    };
+
+    var getScroll = function() {
+      return window.pageYOffset;
+    };
+
+    var checkPosition = function() {
+      var bodyHeight = getScroll();
+
+      if (bodyHeight >= limitShow) {
+        showMenu()
+      } else {
+        hideMenu();
+      }
+    }
+
+    $('.menu .logo').on('click', function(e) {
+      if(e) {
+        e.preventDefault();
+      }
+
+      $('body').animate({
+        scrollTop: 0
+      }, 500, 'swing');
+
+    })
+
+    $(window).on('scroll', function() {
+
+      checkPosition();
+    });
+
+    checkPosition();
 };
 
 
@@ -21459,9 +21502,8 @@ var FeaturesView = Backbone.View.extend({
     $('.inline').addClass('unrevealed fix-height');
 
 
-    $('.inline .features-item').removeClass('is-hidden');
-    $('#item-' + $item).addClass('is-hidden');
-    // debugger;
+    $('.inline .features-item').removeClass('is-hidden current');
+    $('#item-' + $item).addClass('current');
 
     // Reveals slider and slide
     $('.expose-container').removeClass('unrevealed is-hidden');
@@ -21485,18 +21527,34 @@ var IntroductionView = Backbone.View.extend({
 
   el: '.introduction',
 
+  events: {
+    'click .play-video': 'launchModal',
+    'click .next' : 'scrollDown',
+  },
+
   initialize: function() {
     $(window).on('scroll', _.bind(this.doParalaxEfect, this));
     this.bg = $('.bg');
     this.doParalaxEfect();
-    this.launchModal();
+    //this.launchModal();
   },
 
-  launchModal: function() {
-    var $video = this.$el.find('video');
+  scrollDown: function(e) {
+    if(e) {
+      e.preventDefault();
+
+      $('body').animate({
+        scrollTop: $('.signals').offset().top
+      }, 500, 'swing');
+    }
+
+  },
+
+  launchModal: function(e) {
+    //var $video = this.$el.find('video');
 
     // this.$el.find('.play-video').on('click', function(e) {
-    //   e.preventDefault();
+    e.preventDefault();
 
     //   $('#modal-intro').foundation('reveal', 'open');
     //   $video[0].play();
@@ -21510,14 +21568,14 @@ var IntroductionView = Backbone.View.extend({
   doParalaxEfect: function() {
     var scroll = this.getScroll();
 
-    var translateY = (scroll / 0.7).toFixed(0);
+    var translateY =  scroll - (scroll / 2);
 
     this.bg.css({
       '-webkit-transform': 'translate3d(0,' + translateY + 'px, 0)',
       '-moz-transform': 'translate3d(0,' + translateY + 'px, 0)',
       '-ms-transform': 'translate3d(0,' + translateY + 'px, 0)',
       '-o-transform': 'translate3d(0,' + translateY + 'px, 0)',
-      'transform' :  'translateY(' + translateY + 'px)'
+      'transform' :  'translate3d(0,' + translateY + 'px)'
      });
   }
 
@@ -21526,12 +21584,52 @@ var IntroductionView = Backbone.View.extend({
 
 var SignalsView = Backbone.View.extend({
 
-
   el: '.signals',
 
   events: {
     'click .link-signals' : 'moveLeft',
     'click .back' : 'moveRight'
+  },
+
+  initialize: function() {
+    this.video = document.querySelector('#signals-video');
+    this.isPlaying = false;
+
+    var startlimit = $('.signals').offset().top - 200,
+      endlimit = $('.signals').offset().top + $('.signals').height();
+
+    $(window).on('scroll', _.bind(function() {
+
+      if (this.checkYOffset() > startlimit  &&
+        this.checkYOffset() < endlimit &&
+        !this.isPlaying) {
+        this.playVideo();
+      }
+
+      if (this.checkYOffset() < startlimit / 2 && this.isPlaying ||
+        this.checkYOffset() > endlimit && this.isPlaying) {
+        this.stopVideo();
+      }
+    }, this));
+
+  },
+
+  checkYOffset: function() {
+    return window.pageYOffset;
+  },
+
+  playVideo: function() {
+    $(this.video).removeClass('invisible');
+    this.video.play();
+    this.isPlaying = true;
+  },
+
+  stopVideo: function() {
+    $(this.video).addClass('invisible');
+    this.video.pause();
+    this.video.currentTime = 0;
+
+    this.isPlaying = false;
   },
 
   moveLeft: function(e) {
