@@ -21392,16 +21392,42 @@ return jQuery;
 }));
 
 
-var RocketLauncher = function() {
-    'use strict';
+var RocketLauncher = Class.extend({
 
+  init: function() {
     new IntroductionView();
     new SignalsView();
-    new DescriptionView();
+    // new DescriptionView();
     new FeaturesView();
 
-    var $menu = $('.menu');
-    var limitShow = $('.signals').offset().top;
+    this.setListeners();
+    this.checkPosition();
+  },
+
+  setListeners: function() {
+    $('.menu .logo').on('click', function(e) {
+      if(e) {
+        e.preventDefault();
+      }
+
+      $('body').animate({
+        scrollTop: 0
+      }, 500, 'swing');
+    });
+
+    $(window).on('scroll', _.bind(function() {
+      this.checkPosition();
+    }, this));
+  },
+
+  getScroll: function() {
+    return window.pageYOffset;
+  },
+
+  checkPosition: function() {
+    var bodyYOffset = this.getScroll(),
+      $menu = $('.menu'),
+      limitShow = $('.signals').offset().top;
 
     var showMenu = function() {
       $menu.removeClass('unrevealed');
@@ -21411,44 +21437,18 @@ var RocketLauncher = function() {
       $menu.addClass('unrevealed');
     };
 
-    var getScroll = function() {
-      return window.pageYOffset;
-    };
-
-    var checkPosition = function() {
-      var bodyHeight = getScroll();
-
-      if (bodyHeight >= limitShow) {
-        showMenu()
-      } else {
-        hideMenu();
-      }
+    if (bodyYOffset >= limitShow) {
+      showMenu();
+    } else {
+      hideMenu();
     }
+  }
 
-    $('.menu .logo').on('click', function(e) {
-      if(e) {
-        e.preventDefault();
-      }
-
-      $('body').animate({
-        scrollTop: 0
-      }, 500, 'swing');
-
-    })
-
-    $(window).on('scroll', function() {
-
-      checkPosition();
-    });
-
-    checkPosition();
-};
-
+});
 
 window.onload = function() {
   'use strict';
-
-   new RocketLauncher();
+  new RocketLauncher();
 };
 
 
@@ -21477,6 +21477,7 @@ var DescriptionView = Backbone.View.extend({
 
 
 var FeaturesView = Backbone.View.extend({
+
   el: '.features',
 
   events: {
@@ -21494,13 +21495,7 @@ var FeaturesView = Backbone.View.extend({
       $item = $(e.currentTarget).data('item');
     }
 
-    if ($currentFeature) {
-      $currentFeature.addClass('is-hidden');
-    }
-
-
     $('.inline').addClass('unrevealed fix-height');
-
 
     $('.inline .features-item').removeClass('is-hidden current');
     $('#item-' + $item).addClass('current');
@@ -21517,7 +21512,6 @@ var FeaturesView = Backbone.View.extend({
     window.setTimeout(function() {
       $('.inline').removeClass('unrevealed');
     }, 150);
-
   }
 
 });
@@ -21533,10 +21527,14 @@ var IntroductionView = Backbone.View.extend({
   },
 
   initialize: function() {
-    $(window).on('scroll', _.bind(this.doParalaxEfect, this));
     this.bg = $('.bg');
-    this.doParalaxEfect();
+    this.setListeners();
+    this.doParallaxEffect();
     //this.launchModal();
+  },
+
+  setListeners: function() {
+    $(window).on('scroll', _.bind(this.doParallaxEffect, this));
   },
 
   scrollDown: function(e) {
@@ -21547,7 +21545,6 @@ var IntroductionView = Backbone.View.extend({
         scrollTop: $('.signals').offset().top
       }, 500, 'swing');
     }
-
   },
 
   launchModal: function(e) {
@@ -21565,10 +21562,9 @@ var IntroductionView = Backbone.View.extend({
     return window.pageYOffset;
   },
 
-  doParalaxEfect: function() {
-    var scroll = this.getScroll();
-
-    var translateY =  scroll - (scroll / 2);
+  doParallaxEffect: function() {
+    var scroll = this.getScroll(),
+      translateY = scroll - (scroll / 2);
 
     this.bg.css({
       '-webkit-transform': 'translate3d(0,' + translateY + 'px, 0)',
@@ -21576,7 +21572,7 @@ var IntroductionView = Backbone.View.extend({
       '-ms-transform': 'translate3d(0,' + translateY + 'px, 0)',
       '-o-transform': 'translate3d(0,' + translateY + 'px, 0)',
       'transform' :  'translate3d(0,' + translateY + 'px)'
-     });
+    });
   }
 
 });
@@ -21592,26 +21588,43 @@ var SignalsView = Backbone.View.extend({
   },
 
   initialize: function() {
+    this.initVars();
+    this.setListeners();
+  },
+
+  initVars: function(){
+    // Video
     this.video = document.querySelector('#signals-video');
     this.isPlaying = false;
 
-    var startlimit = $('.signals').offset().top - 200,
-      endlimit = $('.signals').offset().top + $('.signals').height();
+    // Sliders
+    this.$slides = [
+      this.$el.find('.slide-1'),
+      this.$el.find('.slide-2')
+    ];
 
+    // Offsets
+    this.startlimit = $('.signals').offset().top - 200;
+    this.endlimit = $('.signals').offset().top + $('.signals').height();
+  },
+
+  setListeners: function() {
     $(window).on('scroll', _.bind(function() {
+      this.checkPlayVideo();
+    }, this));
+  },
 
-      if (this.checkYOffset() > startlimit  &&
-        this.checkYOffset() < endlimit &&
+  checkPlayVideo: function() {
+    if (this.checkYOffset() > this.startlimit  &&
+        this.checkYOffset() < this.endlimit &&
         !this.isPlaying) {
         this.playVideo();
       }
 
-      if (this.checkYOffset() < startlimit / 2 && this.isPlaying ||
-        this.checkYOffset() > endlimit && this.isPlaying) {
-        this.stopVideo();
-      }
-    }, this));
-
+    if (this.checkYOffset() < this.startlimit / 2 && this.isPlaying ||
+      this.checkYOffset() > this.endlimit && this.isPlaying) {
+      this.stopVideo();
+    }
   },
 
   checkYOffset: function() {
@@ -21633,23 +21646,23 @@ var SignalsView = Backbone.View.extend({
   },
 
   moveLeft: function(e) {
-    e.preventDefault();
+    if (e) {
+      e.preventDefault();
+    }
 
-    this.$el.find('.slide-1').removeClass('move m-right');
-    this.$el.find('.slide-2').removeClass('move m-right');
-
-    this.$el.find('.slide-1').addClass('move m-left');
-    this.$el.find('.slide-2').addClass('move m-left');
+    this.$slides.forEach(function(slide) {
+      slide.removeClass('move m-right').addClass('move m-left');
+    });
   },
 
   moveRight: function(e) {
-    e.preventDefault();
+    if (e) {
+      e.preventDefault();
+    }
 
-    this.$el.find('.slide-1').removeClass('move m-left');
-    this.$el.find('.slide-2').removeClass('move left');
-
-    this.$el.find('.slide-1').addClass('move m-right');
-    this.$el.find('.slide-2').addClass('move m-right');
+    this.$slides.forEach(function(slide) {
+      slide.removeClass('move m-left').addClass('move m-right');
+    });
   }
 
 });
