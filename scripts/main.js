@@ -21647,7 +21647,7 @@ var SignalsView = Backbone.View.extend({
   el: '.signals',
 
   events: {
-    'click .link-signals' : 'moveLeft',
+    'click #link-signals' : 'moveLeft',
     'click .back' : 'moveRight'
   },
 
