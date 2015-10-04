@@ -21761,6 +21761,7 @@ var RocketLauncher = Class.extend({
     new SignalsView();
     // new DescriptionView();
     new FeaturesView();
+    new FooterCarousel();
 
     this.setListeners();
     this.checkPosition();
@@ -21880,13 +21881,37 @@ var FeaturesView = Backbone.View.extend({
 });
 
 
+var FooterCarousel = Backbone.View.extend({
+
+  el: '#footerCarousel',
+
+  initialize: function() {
+    if (!this.$el.length) {
+      return;
+    }
+    //INIT
+    this.$el.slick({
+      infinite: true,
+      slidesToShow: 4,
+      slidesToScroll: 4,
+      speed: 500,
+      autoplay: true,
+      autoplaySpeed: 3000,
+      slide: 'li'
+    });
+  }
+
+});
+
+
 var IntroductionView = Backbone.View.extend({
 
   el: '.introduction',
 
   events: {
-    'click .play-video': 'launchModal',
+    // 'click .play-video': 'launchModal',
     'click .next' : 'scrollDown',
+    'click #join-button': 'launchJoinModal',
   },
 
   initialize: function() {
@@ -21894,6 +21919,7 @@ var IntroductionView = Backbone.View.extend({
     this.setListeners();
     this.doParallaxEffect();
     //this.launchModal();
+    this.launchJoinModal();
   },
 
   setListeners: function() {
@@ -21931,6 +21957,15 @@ var IntroductionView = Backbone.View.extend({
     //   $('#modal-intro').foundation('reveal', 'open');
     //   $video[0].play();
     // });
+  },
+
+  launchJoinModal: function(e) {
+    // var $video = this.$el.find('video');
+
+    this.$el.find('#join-button').on('click', function(e) {
+      e.preventDefault();
+      $('#modal-join').foundation('reveal', 'open');
+    });
   },
 
   getScroll: function() {
