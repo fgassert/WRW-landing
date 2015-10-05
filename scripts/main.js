@@ -21906,12 +21906,12 @@ var FooterCarousel = Backbone.View.extend({
 
 var IntroductionView = Backbone.View.extend({
 
-  el: '.introduction',
+  el: 'body',
 
   events: {
     // 'click .play-video': 'launchModal',
     'click .next' : 'scrollDown',
-    'click #join-button': 'launchJoinModal',
+    'click .js-join': 'launchJoinModal',
   },
 
   initialize: function() {
@@ -21919,7 +21919,6 @@ var IntroductionView = Backbone.View.extend({
     this.setListeners();
     this.doParallaxEffect();
     //this.launchModal();
-    this.launchJoinModal();
   },
 
   setListeners: function() {
@@ -21961,11 +21960,8 @@ var IntroductionView = Backbone.View.extend({
 
   launchJoinModal: function(e) {
     // var $video = this.$el.find('video');
-
-    this.$el.find('#join-button').on('click', function(e) {
-      e.preventDefault();
-      $('#modal-join').foundation('reveal', 'open');
-    });
+    e.preventDefault();
+    $('#modal-join').foundation('reveal', 'open');
   },
 
   getScroll: function() {
