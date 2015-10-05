@@ -10758,7 +10758,7 @@ return jQuery;
   }
 }.call(this));
 
-//     Backbone.js 1.2.3
+//     Backbone.js 1.2.1
 
 //     (c) 2010-2015 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
 //     Backbone may be freely distributed under the MIT license.
@@ -10801,10 +10801,10 @@ return jQuery;
   var previousBackbone = root.Backbone;
 
   // Create a local reference to a common array method we'll want to use later.
-  var slice = Array.prototype.slice;
+  var slice = [].slice;
 
   // Current version of the library. Keep in sync with `package.json`.
-  Backbone.VERSION = '1.2.3';
+  Backbone.VERSION = '1.2.1';
 
   // For Backbone's purposes, jQuery, Zepto, Ender, or My Library (kidding) owns
   // the `$` variable.
@@ -10828,13 +10828,8 @@ return jQuery;
   // form param named `model`.
   Backbone.emulateJSON = false;
 
-  // Proxy Backbone class methods to Underscore functions, wrapping the model's
-  // `attributes` object or collection's `models` array behind the scenes.
-  //
-  // collection.filter(function(model) { return model.get('age') > 10 });
-  // collection.each(this.addView);
-  //
-  // `Function#apply` can be slow so we use the method's arg count, if we know it.
+  // Proxy Underscore methods to a Backbone class' prototype using a
+  // particular attribute as the data argument
   var addMethod = function(length, method, attribute) {
     switch (length) {
       case 1: return function() {
@@ -10844,10 +10839,10 @@ return jQuery;
         return _[method](this[attribute], value);
       };
       case 3: return function(iteratee, context) {
-        return _[method](this[attribute], cb(iteratee, this), context);
+        return _[method](this[attribute], iteratee, context);
       };
       case 4: return function(iteratee, defaultVal, context) {
-        return _[method](this[attribute], cb(iteratee, this), defaultVal, context);
+        return _[method](this[attribute], iteratee, defaultVal, context);
       };
       default: return function() {
         var args = slice.call(arguments);
@@ -10862,26 +10857,12 @@ return jQuery;
     });
   };
 
-  // Support `collection.sortBy('attr')` and `collection.findWhere({id: 1})`.
-  var cb = function(iteratee, instance) {
-    if (_.isFunction(iteratee)) return iteratee;
-    if (_.isObject(iteratee) && !instance._isModel(iteratee)) return modelMatcher(iteratee);
-    if (_.isString(iteratee)) return function(model) { return model.get(iteratee); };
-    return iteratee;
-  };
-  var modelMatcher = function(attrs) {
-    var matcher = _.matches(attrs);
-    return function(model) {
-      return matcher(model.attributes);
-    };
-  };
-
   // Backbone.Events
   // ---------------
 
   // A module that can be mixed in to *any object* in order to provide it with
-  // a custom event channel. You may bind a callback to an event with `on` or
-  // remove with `off`; `trigger`-ing an event fires all callbacks in
+  // custom events. You may bind with `on` or remove with `off` callback
+  // functions to an event; `trigger`-ing an event fires all callbacks in
   // succession.
   //
   //     var object = {};
@@ -10896,25 +10877,26 @@ return jQuery;
 
   // Iterates over the standard `event, callback` (as well as the fancy multiple
   // space-separated events `"change blur", callback` and jQuery-style event
-  // maps `{event: callback}`).
-  var eventsApi = function(iteratee, events, name, callback, opts) {
+  // maps `{event: callback}`), reducing them by manipulating `memo`.
+  // Passes a normalized single event name and callback, as well as any
+  // optional `opts`.
+  var eventsApi = function(iteratee, memo, name, callback, opts) {
     var i = 0, names;
     if (name && typeof name === 'object') {
       // Handle event maps.
       if (callback !== void 0 && 'context' in opts && opts.context === void 0) opts.context = callback;
       for (names = _.keys(name); i < names.length ; i++) {
-        events = eventsApi(iteratee, events, names[i], name[names[i]], opts);
+        memo = iteratee(memo, names[i], name[names[i]], opts);
       }
     } else if (name && eventSplitter.test(name)) {
-      // Handle space separated event names by delegating them individually.
+      // Handle space separated event names.
       for (names = name.split(eventSplitter); i < names.length; i++) {
-        events = iteratee(events, names[i], callback, opts);
+        memo = iteratee(memo, names[i], callback, opts);
       }
     } else {
-      // Finally, standard events.
-      events = iteratee(events, name, callback, opts);
+      memo = iteratee(memo, name, callback, opts);
     }
-    return events;
+    return memo;
   };
 
   // Bind an event to a `callback` function. Passing `"all"` will bind
@@ -10923,7 +10905,8 @@ return jQuery;
     return internalOn(this, name, callback, context);
   };
 
-  // Guard the `listening` argument from the public API.
+  // An internal use `on` function, used to guard the `listening` argument from
+  // the public API.
   var internalOn = function(obj, name, callback, context, listening) {
     obj._events = eventsApi(onApi, obj._events || {}, name, callback, {
         context: context,
@@ -10940,8 +10923,7 @@ return jQuery;
   };
 
   // Inversion-of-control versions of `on`. Tell *this* object to listen to
-  // an event in another object... keeping track of what it's listening to
-  // for easier unbinding later.
+  // an event in another object... keeping track of what it's listening to.
   Events.listenTo =  function(obj, name, callback) {
     if (!obj) return this;
     var id = obj._listenId || (obj._listenId = _.uniqueId('l'));
@@ -11009,6 +10991,7 @@ return jQuery;
 
   // The reducing API that removes a callback from the `events` object.
   var offApi = function(events, name, callback, options) {
+    // No events to consider.
     if (!events) return;
 
     var i = 0, listening;
@@ -11063,9 +11046,9 @@ return jQuery;
   };
 
   // Bind an event to only be triggered a single time. After the first time
-  // the callback is invoked, its listener will be removed. If multiple events
-  // are passed in using the space-separated syntax, the handler will fire
-  // once for each event, not once for a combination of all events.
+  // the callback is invoked, it will be removed. When multiple events are
+  // passed in using the space-separated syntax, the event will fire once for every
+  // event you passed in, not once for a combination of all events
   Events.once =  function(name, callback, context) {
     // Map the event into a `{event: once}` object.
     var events = eventsApi(onceMap, {}, name, callback, _.bind(this.off, this));
@@ -11253,6 +11236,9 @@ return jQuery;
       var changed = this.changed;
       var prev    = this._previousAttributes;
 
+      // Check for changes of `id`.
+      if (this.idAttribute in attrs) this.id = attrs[this.idAttribute];
+
       // For each `set` attribute, update or delete the current value.
       for (var attr in attrs) {
         val = attrs[attr];
@@ -11264,9 +11250,6 @@ return jQuery;
         }
         unset ? delete current[attr] : current[attr] = val;
       }
-
-      // Update the `id`.
-      this.id = this.get(this.idAttribute);
 
       // Trigger all relevant attribute changes.
       if (!silent) {
@@ -11490,8 +11473,7 @@ return jQuery;
 
   });
 
-  // Underscore methods that we want to implement on the Model, mapped to the
-  // number of arguments they take.
+  // Underscore methods that we want to implement on the Model.
   var modelMethods = { keys: 1, values: 1, pairs: 1, invert: 1, pick: 0,
       omit: 0, chain: 1, isEmpty: 1 };
 
@@ -11524,16 +11506,6 @@ return jQuery;
   var setOptions = {add: true, remove: true, merge: true};
   var addOptions = {add: true, remove: false};
 
-  // Splices `insert` into `array` at index `at`.
-  var splice = function(array, insert, at) {
-    at = Math.min(Math.max(at, 0), array.length);
-    var tail = Array(array.length - at);
-    var length = insert.length;
-    for (var i = 0; i < tail.length; i++) tail[i] = array[i + at];
-    for (i = 0; i < length; i++) array[i + at] = insert[i];
-    for (i = 0; i < tail.length; i++) array[i + length + at] = tail[i];
-  };
-
   // Define the Collection's inheritable methods.
   _.extend(Collection.prototype, Events, {
 
@@ -11556,9 +11528,7 @@ return jQuery;
       return Backbone.sync.apply(this, arguments);
     },
 
-    // Add a model, or list of models to the set. `models` may be Backbone
-    // Models or raw JavaScript objects to be converted to Models, or any
-    // combination of the two.
+    // Add a model, or list of models to the set.
     add: function(models, options) {
       return this.set(models, _.extend({merge: false}, options, addOptions));
     },
@@ -11578,88 +11548,83 @@ return jQuery;
     // already exist in the collection, as necessary. Similar to **Model#set**,
     // the core operation for updating the data contained by the collection.
     set: function(models, options) {
-      if (models == null) return;
-
       options = _.defaults({}, options, setOptions);
       if (options.parse && !this._isModel(models)) models = this.parse(models, options);
-
       var singular = !_.isArray(models);
-      models = singular ? [models] : models.slice();
-
+      models = singular ? (models ? [models] : []) : models.slice();
+      var id, model, attrs, existing, sort;
       var at = options.at;
       if (at != null) at = +at;
       if (at < 0) at += this.length + 1;
-
-      var set = [];
-      var toAdd = [];
-      var toRemove = [];
-      var modelMap = {};
-
-      var add = options.add;
-      var merge = options.merge;
-      var remove = options.remove;
-
-      var sort = false;
       var sortable = this.comparator && (at == null) && options.sort !== false;
       var sortAttr = _.isString(this.comparator) ? this.comparator : null;
+      var toAdd = [], toRemove = [], modelMap = {};
+      var add = options.add, merge = options.merge, remove = options.remove;
+      var order = !sortable && add && remove ? [] : false;
+      var orderChanged = false;
 
       // Turn bare objects into model references, and prevent invalid models
       // from being added.
-      var model;
       for (var i = 0; i < models.length; i++) {
-        model = models[i];
+        attrs = models[i];
 
         // If a duplicate is found, prevent it from being added and
         // optionally merge it into the existing model.
-        var existing = this.get(model);
-        if (existing) {
-          if (merge && model !== existing) {
-            var attrs = this._isModel(model) ? model.attributes : model;
+        if (existing = this.get(attrs)) {
+          if (remove) modelMap[existing.cid] = true;
+          if (merge && attrs !== existing) {
+            attrs = this._isModel(attrs) ? attrs.attributes : attrs;
             if (options.parse) attrs = existing.parse(attrs, options);
             existing.set(attrs, options);
-            if (sortable && !sort) sort = existing.hasChanged(sortAttr);
-          }
-          if (!modelMap[existing.cid]) {
-            modelMap[existing.cid] = true;
-            set.push(existing);
+            if (sortable && !sort && existing.hasChanged(sortAttr)) sort = true;
           }
           models[i] = existing;
 
         // If this is a new, valid model, push it to the `toAdd` list.
         } else if (add) {
-          model = models[i] = this._prepareModel(model, options);
-          if (model) {
-            toAdd.push(model);
-            this._addReference(model, options);
-            modelMap[model.cid] = true;
-            set.push(model);
-          }
+          model = models[i] = this._prepareModel(attrs, options);
+          if (!model) continue;
+          toAdd.push(model);
+          this._addReference(model, options);
         }
+
+        // Do not add multiple models with the same `id`.
+        model = existing || model;
+        if (!model) continue;
+        id = this.modelId(model.attributes);
+        if (order && (model.isNew() || !modelMap[id])) {
+          order.push(model);
+
+          // Check to see if this is actually a new model at this index.
+          orderChanged = orderChanged || !this.models[i] || model.cid !== this.models[i].cid;
+        }
+
+        modelMap[id] = true;
       }
 
-      // Remove stale models.
+      // Remove nonexistent models if appropriate.
       if (remove) {
-        for (i = 0; i < this.length; i++) {
-          model = this.models[i];
-          if (!modelMap[model.cid]) toRemove.push(model);
+        for (var i = 0; i < this.length; i++) {
+          if (!modelMap[(model = this.models[i]).cid]) toRemove.push(model);
         }
         if (toRemove.length) this._removeModels(toRemove, options);
       }
 
       // See if sorting is needed, update `length` and splice in new models.
-      var orderChanged = false;
-      var replace = !sortable && add && remove;
-      if (set.length && replace) {
-        orderChanged = this.length != set.length || _.some(this.models, function(model, index) {
-          return model !== set[index];
-        });
-        this.models.length = 0;
-        splice(this.models, set, 0);
-        this.length = this.models.length;
-      } else if (toAdd.length) {
+      if (toAdd.length || orderChanged) {
         if (sortable) sort = true;
-        splice(this.models, toAdd, at == null ? this.length : at);
-        this.length = this.models.length;
+        this.length += toAdd.length;
+        if (at != null) {
+          for (var i = 0; i < toAdd.length; i++) {
+            this.models.splice(at + i, 0, toAdd[i]);
+          }
+        } else {
+          if (order) this.models.length = 0;
+          var orderedModels = order || toAdd;
+          for (var i = 0; i < orderedModels.length; i++) {
+            this.models.push(orderedModels[i]);
+          }
+        }
       }
 
       // Silently sort the collection if appropriate.
@@ -11667,10 +11632,10 @@ return jQuery;
 
       // Unless silenced, it's time to fire all appropriate add/sort events.
       if (!options.silent) {
-        for (i = 0; i < toAdd.length; i++) {
-          if (at != null) options.index = at + i;
-          model = toAdd[i];
-          model.trigger('add', model, this, options);
+        var addOpts = at != null ? _.clone(options) : options;
+        for (var i = 0; i < toAdd.length; i++) {
+          if (at != null) addOpts.index = at + i;
+          (model = toAdd[i]).trigger('add', model, this, addOpts);
         }
         if (sort || orderChanged) this.trigger('sort', this, options);
         if (toAdd.length || toRemove.length) this.trigger('update', this, options);
@@ -11739,7 +11704,10 @@ return jQuery;
     // Return models with matching attributes. Useful for simple cases of
     // `filter`.
     where: function(attrs, first) {
-      return this[first ? 'find' : 'filter'](attrs);
+      var matches = _.matches(attrs);
+      return this[first ? 'find' : 'filter'](function(model) {
+        return matches(model.attributes);
+      });
     },
 
     // Return the first model with matching attributes. Useful for simple cases
@@ -11752,19 +11720,16 @@ return jQuery;
     // normal circumstances, as the set will maintain sort order as each item
     // is added.
     sort: function(options) {
-      var comparator = this.comparator;
-      if (!comparator) throw new Error('Cannot sort a set without a comparator');
+      if (!this.comparator) throw new Error('Cannot sort a set without a comparator');
       options || (options = {});
 
-      var length = comparator.length;
-      if (_.isFunction(comparator)) comparator = _.bind(comparator, this);
-
       // Run sort based on type of `comparator`.
-      if (length === 1 || _.isString(comparator)) {
-        this.models = this.sortBy(comparator);
+      if (_.isString(this.comparator) || this.comparator.length === 1) {
+        this.models = this.sortBy(this.comparator, this);
       } else {
-        this.models.sort(comparator);
+        this.models.sort(_.bind(this.comparator, this));
       }
+
       if (!options.silent) this.trigger('sort', this, options);
       return this;
     },
@@ -11853,6 +11818,7 @@ return jQuery;
     },
 
     // Internal method called by both remove and set.
+    // Returns removed models, or false if nothing is removed.
     _removeModels: function(models, options) {
       var removed = [];
       for (var i = 0; i < models.length; i++) {
@@ -11922,15 +11888,28 @@ return jQuery;
   // right here:
   var collectionMethods = { forEach: 3, each: 3, map: 3, collect: 3, reduce: 4,
       foldl: 4, inject: 4, reduceRight: 4, foldr: 4, find: 3, detect: 3, filter: 3,
-      select: 3, reject: 3, every: 3, all: 3, some: 3, any: 3, include: 3, includes: 3,
-      contains: 3, invoke: 0, max: 3, min: 3, toArray: 1, size: 1, first: 3,
+      select: 3, reject: 3, every: 3, all: 3, some: 3, any: 3, include: 2,
+      contains: 2, invoke: 0, max: 3, min: 3, toArray: 1, size: 1, first: 3,
       head: 3, take: 3, initial: 3, rest: 3, tail: 3, drop: 3, last: 3,
       without: 0, difference: 0, indexOf: 3, shuffle: 1, lastIndexOf: 3,
-      isEmpty: 1, chain: 1, sample: 3, partition: 3, groupBy: 3, countBy: 3,
-      sortBy: 3, indexBy: 3};
+      isEmpty: 1, chain: 1, sample: 3, partition: 3 };
 
   // Mix in each Underscore method as a proxy to `Collection#models`.
   addUnderscoreMethods(Collection, collectionMethods, 'models');
+
+  // Underscore methods that take a property name as an argument.
+  var attributeMethods = ['groupBy', 'countBy', 'sortBy', 'indexBy'];
+
+  // Use attributes instead of properties.
+  _.each(attributeMethods, function(method) {
+    if (!_[method]) return;
+    Collection.prototype[method] = function(value, context) {
+      var iterator = _.isFunction(value) ? value : function(model) {
+        return model.get(value);
+      };
+      return _[method](this.models, iterator, context);
+    };
+  });
 
   // Backbone.View
   // -------------
@@ -11955,7 +11934,7 @@ return jQuery;
   // Cached regex to split keys for `delegate`.
   var delegateEventSplitter = /^(\S+)\s*(.*)$/;
 
-  // List of view options to be set as properties.
+  // List of view options to be merged as properties.
   var viewOptions = ['model', 'collection', 'el', 'id', 'attributes', 'className', 'tagName', 'events'];
 
   // Set up all inheritable **Backbone.View** properties and methods.
@@ -12299,7 +12278,7 @@ return jQuery;
   // falls back to polling.
   var History = Backbone.History = function() {
     this.handlers = [];
-    this.checkUrl = _.bind(this.checkUrl, this);
+    _.bindAll(this, 'checkUrl');
 
     // Ensure that `History` can be used outside of the browser.
     if (typeof window !== 'undefined') {
@@ -12392,7 +12371,7 @@ return jQuery;
       this.options          = _.extend({root: '/'}, this.options, options);
       this.root             = this.options.root;
       this._wantsHashChange = this.options.hashChange !== false;
-      this._hasHashChange   = 'onhashchange' in window && (document.documentMode === void 0 || document.documentMode > 7);
+      this._hasHashChange   = 'onhashchange' in window;
       this._useHashChange   = this._wantsHashChange && this._hasHashChange;
       this._wantsPushState  = !!this.options.pushState;
       this._hasPushState    = !!(this.history && this.history.pushState);
@@ -12511,7 +12490,7 @@ return jQuery;
       // If the root doesn't match, no routes can match either.
       if (!this.matchRoot()) return false;
       fragment = this.fragment = this.getFragment(fragment);
-      return _.some(this.handlers, function(handler) {
+      return _.any(this.handlers, function(handler) {
         if (handler.route.test(fragment)) {
           handler.callback(fragment);
           return true;
@@ -19118,7 +19097,7 @@ return jQuery;
 |___/_|_|\___|_|\_(_)/ |___/
                    |__/
 
- Version: 1.5.8
+ Version: 1.5.5
   Author: Ken Wheeler
  Website: http://kenwheeler.github.io
     Docs: http://kenwheeler.github.io/slick
@@ -19147,7 +19126,8 @@ return jQuery;
 
         function Slick(element, settings) {
 
-            var _ = this, dataSettings;
+            var _ = this,
+                dataSettings, responsiveSettings, breakpoint;
 
             _.defaults = {
                 accessibility: true,
@@ -19156,15 +19136,15 @@ return jQuery;
                 appendDots: $(element),
                 arrows: true,
                 asNavFor: null,
-                prevArrow: '<button type="button" data-role="none" class="slick-prev" aria-label="Previous" tabindex="0" role="button">Previous</button>',
-                nextArrow: '<button type="button" data-role="none" class="slick-next" aria-label="Next" tabindex="0" role="button">Next</button>',
+                prevArrow: '<button type="button" data-role="none" class="slick-prev" aria-label="previous">Previous</button>',
+                nextArrow: '<button type="button" data-role="none" class="slick-next" aria-label="next">Next</button>',
                 autoplay: false,
                 autoplaySpeed: 3000,
                 centerMode: false,
                 centerPadding: '50px',
                 cssEase: 'ease',
                 customPaging: function(slider, i) {
-                    return '<button type="button" data-role="none" role="button" aria-required="false" tabindex="0">' + (i + 1) + '</button>';
+                    return '<button type="button" data-role="none">' + (i + 1) + '</button>';
                 },
                 dots: false,
                 dotsClass: 'slick-dots',
@@ -19196,8 +19176,7 @@ return jQuery;
                 variableWidth: false,
                 vertical: false,
                 verticalSwiping: false,
-                waitForAnimate: true,
-                zIndex: 1000
+                waitForAnimate: true
             };
 
             _.initials = {
@@ -19256,6 +19235,27 @@ return jQuery;
             _.currentSlide = _.options.initialSlide;
 
             _.originalSettings = _.options;
+            responsiveSettings = _.options.responsive || null;
+
+            if (responsiveSettings && responsiveSettings.length > -1) {
+                _.respondTo = _.options.respondTo || 'window';
+                for (breakpoint in responsiveSettings) {
+                    if (responsiveSettings.hasOwnProperty(breakpoint)) {
+                        _.breakpoints.push(responsiveSettings[
+                            breakpoint].breakpoint);
+                        _.breakpointSettings[responsiveSettings[
+                                breakpoint].breakpoint] =
+                            responsiveSettings[breakpoint].settings;
+                    }
+                }
+                _.breakpoints.sort(function(a, b) {
+                    if (_.options.mobileFirst === true) {
+                        return a - b;
+                    } else {
+                        return b - a;
+                    }
+                });
+            }
 
             if (typeof document.mozHidden !== 'undefined') {
                 _.hidden = 'mozHidden';
@@ -19283,9 +19283,8 @@ return jQuery;
             // Extracted from jQuery v1.11 source
             _.htmlExpr = /^(?:\s*(<[\w\W]+>)[^>]*)$/;
 
-
-            _.registerBreakpoints();
             _.init(true);
+
             _.checkResponsive(true);
 
         }
@@ -19438,7 +19437,7 @@ return jQuery;
             asNavFor = $(asNavFor).not(_.$slider);
         }
 
-        if ( asNavFor !== null && typeof asNavFor === 'object' ) {
+        if ( asNavFor !== null && typeof asNavFor === "object" ) {
             asNavFor.each(function() {
                 var target = $(this).slick('getSlick');
                 if(!target.unslicked) {
@@ -19531,40 +19530,21 @@ return jQuery;
 
         var _ = this;
 
-        if (_.options.arrows === true ) {
+        if (_.options.arrows === true && _.slideCount > _.options.slidesToShow) {
 
-            _.$prevArrow = $(_.options.prevArrow).addClass('slick-arrow');
-            _.$nextArrow = $(_.options.nextArrow).addClass('slick-arrow');
+            _.$prevArrow = $(_.options.prevArrow);
+            _.$nextArrow = $(_.options.nextArrow);
 
-            if( _.slideCount > _.options.slidesToShow ) {
+            if (_.htmlExpr.test(_.options.prevArrow)) {
+                _.$prevArrow.appendTo(_.options.appendArrows);
+            }
 
-                _.$prevArrow.removeClass('slick-hidden').removeAttr('aria-hidden tabindex');
-                _.$nextArrow.removeClass('slick-hidden').removeAttr('aria-hidden tabindex');
+            if (_.htmlExpr.test(_.options.nextArrow)) {
+                _.$nextArrow.appendTo(_.options.appendArrows);
+            }
 
-                if (_.htmlExpr.test(_.options.prevArrow)) {
-                    _.$prevArrow.prependTo(_.options.appendArrows);
-                }
-
-                if (_.htmlExpr.test(_.options.nextArrow)) {
-                    _.$nextArrow.appendTo(_.options.appendArrows);
-                }
-
-                if (_.options.infinite !== true) {
-                    _.$prevArrow
-                        .addClass('slick-disabled')
-                        .attr('aria-disabled', 'true');
-                }
-
-            } else {
-
-                _.$prevArrow.add( _.$nextArrow )
-
-                    .addClass('slick-hidden')
-                    .attr({
-                        'aria-disabled': 'true',
-                        'tabindex': '-1'
-                    });
-
+            if (_.options.infinite !== true) {
+                _.$prevArrow.addClass('slick-disabled');
             }
 
         }
@@ -19599,11 +19579,9 @@ return jQuery;
 
         var _ = this;
 
-        _.$slides =
-            _.$slider
-                .children( _.options.slide + ':not(.slick-cloned)')
-                .addClass('slick-slide');
-
+        _.$slides = _.$slider.children(
+            ':not(.slick-cloned)').addClass(
+            'slick-slide');
         _.slideCount = _.$slides.length;
 
         _.$slides.each(function(index, element) {
@@ -19638,8 +19616,11 @@ return jQuery;
 
         _.updateDots();
 
+        if (_.options.accessibility === true) {
+            _.$list.prop('tabIndex', 0);
+        }
 
-        _.setSlideClasses(typeof _.currentSlide === 'number' ? _.currentSlide : 0);
+        _.setSlideClasses(typeof this.currentSlide === 'number' ? this.currentSlide : 0);
 
         if (_.options.draggable === true) {
             _.$list.addClass('draggable');
@@ -19655,7 +19636,6 @@ return jQuery;
         originalSlides = _.$slider.children();
 
         if(_.options.rows > 1) {
-
             slidesPerSection = _.options.slidesPerRow * _.options.rows;
             numOfSlides = Math.ceil(
                 originalSlides.length / slidesPerSection
@@ -19674,20 +19654,18 @@ return jQuery;
                     slide.appendChild(row);
                 }
                 newSlides.appendChild(slide);
-            }
-
+            };
             _.$slider.html(newSlides);
             _.$slider.children().children().children()
                 .css({
-                    'width':(100 / _.options.slidesPerRow) + '%',
+                    'width':(100 / _.options.slidesPerRow) + "%",
                     'display': 'inline-block'
                 });
-
-        }
+        };
 
     };
 
-    Slick.prototype.checkResponsive = function(initial, forceUpdate) {
+    Slick.prototype.checkResponsive = function(initial) {
 
         var _ = this,
             breakpoint, targetBreakpoint, respondToWidth, triggerBreakpoint = false;
@@ -19702,9 +19680,8 @@ return jQuery;
             respondToWidth = Math.min(windowWidth, sliderWidth);
         }
 
-        if ( _.options.responsive &&
-            _.options.responsive.length &&
-            _.options.responsive !== null) {
+        if (_.originalSettings.responsive && _.originalSettings
+            .responsive.length > -1 && _.originalSettings.responsive !== null) {
 
             targetBreakpoint = null;
 
@@ -19724,7 +19701,7 @@ return jQuery;
 
             if (targetBreakpoint !== null) {
                 if (_.activeBreakpoint !== null) {
-                    if (targetBreakpoint !== _.activeBreakpoint || forceUpdate) {
+                    if (targetBreakpoint !== _.activeBreakpoint) {
                         _.activeBreakpoint =
                             targetBreakpoint;
                         if (_.breakpointSettings[targetBreakpoint] === 'unslick') {
@@ -19815,7 +19792,7 @@ return jQuery;
                     event.data.index || $target.index() * _.options.slidesToScroll;
 
                 _.slideHandler(_.checkNavigable(index), false, dontAnimate);
-                $target.children().trigger('focus');
+                $target.children().trigger("focus");
                 break;
 
             default:
@@ -19938,38 +19915,17 @@ return jQuery;
         if (_.$dots) {
             _.$dots.remove();
         }
-
-
-        if ( _.$prevArrow && _.$prevArrow.length ) {
-
-            _.$prevArrow
-                .removeClass('slick-disabled slick-arrow slick-hidden')
-                .removeAttr('aria-hidden aria-disabled tabindex')
-                .css("display","");
-
-            if ( _.htmlExpr.test( _.options.prevArrow )) {
-                _.$prevArrow.remove();
-            }
+        if (_.$prevArrow && (typeof _.options.prevArrow !== 'object')) {
+            _.$prevArrow.remove();
         }
-
-        if ( _.$nextArrow && _.$nextArrow.length ) {
-
-            _.$nextArrow
-                .removeClass('slick-disabled slick-arrow slick-hidden')
-                .removeAttr('aria-hidden aria-disabled tabindex')
-                .css("display","");
-
-            if ( _.htmlExpr.test( _.options.nextArrow )) {
-                _.$nextArrow.remove();
-            }
-
+        if (_.$nextArrow && (typeof _.options.nextArrow !== 'object')) {
+            _.$nextArrow.remove();
         }
-
 
         if (_.$slides) {
 
             _.$slides
-                .removeClass('slick-slide slick-active slick-center slick-visible slick-current')
+                .removeClass('slick-slide slick-active slick-center slick-visible')
                 .removeAttr('aria-hidden')
                 .removeAttr('data-slick-index')
                 .each(function(){
@@ -20020,7 +19976,7 @@ return jQuery;
         if (_.cssTransitions === false) {
 
             _.$slides.eq(slideIndex).css({
-                zIndex: _.options.zIndex
+                zIndex: 1000
             });
 
             _.$slides.eq(slideIndex).animate({
@@ -20033,7 +19989,7 @@ return jQuery;
 
             _.$slides.eq(slideIndex).css({
                 opacity: 1,
-                zIndex: _.options.zIndex
+                zIndex: 1000
             });
 
             if (callback) {
@@ -20044,30 +20000,6 @@ return jQuery;
                     callback.call();
                 }, _.options.speed);
             }
-
-        }
-
-    };
-
-    Slick.prototype.fadeSlideOut = function(slideIndex) {
-
-        var _ = this;
-
-        if (_.cssTransitions === false) {
-
-            _.$slides.eq(slideIndex).animate({
-                opacity: 0,
-                zIndex: _.options.zIndex - 2
-            }, _.options.speed, _.options.easing);
-
-        } else {
-
-            _.applyTransition(slideIndex);
-
-            _.$slides.eq(slideIndex).css({
-                opacity: 0,
-                zIndex: _.options.zIndex - 2
-            });
 
         }
 
@@ -20135,7 +20067,7 @@ return jQuery;
             targetSlide;
 
         _.slideOffset = 0;
-        verticalHeight = _.$slides.first().outerHeight(true);
+        verticalHeight = _.$slides.first().outerHeight();
 
         if (_.options.infinite === true) {
             if (_.slideCount > _.options.slidesToShow) {
@@ -20288,7 +20220,6 @@ return jQuery;
         if (!$(_.$slider).hasClass('slick-initialized')) {
 
             $(_.$slider).addClass('slick-initialized');
-
             _.buildRows();
             _.buildOut();
             _.setProps();
@@ -20297,15 +20228,10 @@ return jQuery;
             _.initializeEvents();
             _.updateArrows();
             _.updateDots();
-
         }
 
         if (creation) {
             _.$slider.trigger('init', [_]);
-        }
-
-        if (_.options.accessibility === true) {
-            _.initADA();
         }
 
     };
@@ -20418,21 +20344,19 @@ return jQuery;
     Slick.prototype.keyHandler = function(event) {
 
         var _ = this;
-         //Dont slide if the cursor is inside the form fields and arrow keys are pressed
-        if(!event.target.tagName.match('TEXTAREA|INPUT|SELECT')) {
-            if (event.keyCode === 37 && _.options.accessibility === true) {
-                _.changeSlide({
-                    data: {
-                        message: 'previous'
-                    }
-                });
-            } else if (event.keyCode === 39 && _.options.accessibility === true) {
-                _.changeSlide({
-                    data: {
-                        message: 'next'
-                    }
-                });
-            }
+
+        if (event.keyCode === 37 && _.options.accessibility === true) {
+            _.changeSlide({
+                data: {
+                    message: 'previous'
+                }
+            });
+        } else if (event.keyCode === 39 && _.options.accessibility === true) {
+            _.changeSlide({
+                data: {
+                    message: 'next'
+                }
+            });
         }
 
     };
@@ -20444,26 +20368,24 @@ return jQuery;
 
         function loadImages(imagesScope) {
             $('img[data-lazy]', imagesScope).each(function() {
-
                 var image = $(this),
                     imageSource = $(this).attr('data-lazy'),
                     imageToLoad = document.createElement('img');
 
                 imageToLoad.onload = function() {
-                    image
-                        .animate({ opacity: 0 }, 100, function() {
-                            image
-                                .attr('src', imageSource)
-                                .animate({ opacity: 1 }, 200, function() {
-                                    image
-                                        .removeAttr('data-lazy')
-                                        .removeClass('slick-loading');
-                                });
-                        });
+                    image.animate({
+                        opacity: 1
+                    }, 200);
                 };
-
                 imageToLoad.src = imageSource;
 
+                image
+                    .css({
+                        opacity: 0
+                    })
+                    .attr('src', imageSource)
+                    .removeAttr('data-lazy')
+                    .removeClass('slick-loading');
             });
         }
 
@@ -20575,9 +20497,6 @@ return jQuery;
         if (_.options.autoplay === true && _.paused === false) {
             _.autoPlay();
         }
-        if (_.options.accessibility === true) {
-            _.initADA();
-        }
 
     };
 
@@ -20593,8 +20512,8 @@ return jQuery;
 
     };
 
-    Slick.prototype.preventDefault = function(event) {
-        event.preventDefault();
+    Slick.prototype.preventDefault = function(e) {
+        e.preventDefault();
     };
 
     Slick.prototype.progressiveLazyLoad = function() {
@@ -20629,7 +20548,7 @@ return jQuery;
 
         _.destroy(true);
 
-        $.extend(_, _.initials, { currentSlide: currentSlide });
+        $.extend(_, _.initials);
 
         _.init();
 
@@ -20646,54 +20565,12 @@ return jQuery;
 
     };
 
-    Slick.prototype.registerBreakpoints = function() {
-
-        var _ = this, breakpoint, currentBreakpoint, l,
-            responsiveSettings = _.options.responsive || null;
-
-        if ( $.type(responsiveSettings) === "array" && responsiveSettings.length ) {
-
-            _.respondTo = _.options.respondTo || 'window';
-
-            for ( breakpoint in responsiveSettings ) {
-
-                l = _.breakpoints.length-1;
-                currentBreakpoint = responsiveSettings[breakpoint].breakpoint;
-
-                if (responsiveSettings.hasOwnProperty(breakpoint)) {
-
-                    // loop through the breakpoints and cut out any existing
-                    // ones with the same breakpoint number, we don't want dupes.
-                    while( l >= 0 ) {
-                        if( _.breakpoints[l] && _.breakpoints[l] === currentBreakpoint ) {
-                            _.breakpoints.splice(l,1);
-                        }
-                        l--;
-                    }
-
-                    _.breakpoints.push(currentBreakpoint);
-                    _.breakpointSettings[currentBreakpoint] = responsiveSettings[breakpoint].settings;
-
-                }
-
-            }
-
-            _.breakpoints.sort(function(a, b) {
-                return ( _.options.mobileFirst ) ? a-b : b-a;
-            });
-
-        }
-
-    };
-
     Slick.prototype.reinit = function() {
 
         var _ = this;
 
-        _.$slides =
-            _.$slideTrack
-                .children(_.options.slide)
-                .addClass('slick-slide');
+        _.$slides = _.$slideTrack.children(_.options.slide).addClass(
+            'slick-slide');
 
         _.slideCount = _.$slides.length;
 
@@ -20705,18 +20582,21 @@ return jQuery;
             _.currentSlide = 0;
         }
 
-        _.registerBreakpoints();
-
         _.setProps();
-        _.setupInfinite();
-        _.buildArrows();
-        _.updateArrows();
-        _.initArrowEvents();
-        _.buildDots();
-        _.updateDots();
-        _.initDotEvents();
 
-        _.checkResponsive(false, true);
+        _.setupInfinite();
+
+        _.buildArrows();
+
+        _.updateArrows();
+
+        _.initArrowEvents();
+
+        _.buildDots();
+
+        _.updateDots();
+
+        _.initDotEvents();
 
         if (_.options.focusOnSelect === true) {
             $(_.$slideTrack).children().on('click.slick', _.selectHandler);
@@ -20727,10 +20607,6 @@ return jQuery;
         _.setPosition();
 
         _.$slider.trigger('reInit', [_]);
-
-        if (_.options.autoplay === true) {
-            _.focusHandler();
-        }
 
     };
 
@@ -20863,7 +20739,7 @@ return jQuery;
                     position: 'relative',
                     right: targetLeft,
                     top: 0,
-                    zIndex: _.options.zIndex - 2,
+                    zIndex: 800,
                     opacity: 0
                 });
             } else {
@@ -20871,14 +20747,14 @@ return jQuery;
                     position: 'relative',
                     left: targetLeft,
                     top: 0,
-                    zIndex: _.options.zIndex - 2,
+                    zIndex: 800,
                     opacity: 0
                 });
             }
         });
 
         _.$slides.eq(_.currentSlide).css({
-            zIndex: _.options.zIndex - 1,
+            zIndex: 900,
             opacity: 1
         });
 
@@ -20897,27 +20773,8 @@ return jQuery;
 
     Slick.prototype.setOption = Slick.prototype.slickSetOption = function(option, value, refresh) {
 
-        var _ = this, l, item;
-
-        if( option === "responsive" && $.type(value) === "array" ) {
-            for ( item in value ) {
-                if( $.type( _.options.responsive ) !== "array" ) {
-                    _.options.responsive = [ value[item] ];
-                } else {
-                    l = _.options.responsive.length-1;
-                    // loop through the responsive object and splice out duplicates.
-                    while( l >= 0 ) {
-                        if( _.options.responsive[l].breakpoint === value[item].breakpoint ) {
-                            _.options.responsive.splice(l,1);
-                        }
-                        l--;
-                    }
-                    _.options.responsive.push( value[item] );
-                }
-            }
-        } else {
-            _.options[option] = value;
-        }
+        var _ = this;
+        _.options[option] = value;
 
         if (refresh === true) {
             _.unload();
@@ -20965,16 +20822,6 @@ return jQuery;
             }
         }
 
-        if ( _.options.fade ) {
-            if ( typeof _.options.zIndex === 'number' ) {
-                if( _.options.zIndex < 3 ) {
-                    _.options.zIndex = 3;
-                }
-            } else {
-                _.options.zIndex = _.defaults.zIndex;
-            }
-        }
-
         if (bodyStyle.OTransform !== undefined) {
             _.animType = 'OTransform';
             _.transformType = '-o-transform';
@@ -21014,14 +20861,8 @@ return jQuery;
         var _ = this,
             centerOffset, allSlides, indexOffset, remainder;
 
-        allSlides = _.$slider
-            .find('.slick-slide')
-            .removeClass('slick-active slick-center slick-current')
-            .attr('aria-hidden', 'true');
-
-        _.$slides
-            .eq(index)
-            .addClass('slick-current');
+        _.$slider.find('.slick-slide').removeClass('slick-active').attr('aria-hidden', 'true').removeClass('slick-center');
+        allSlides = _.$slider.find('.slick-slide');
 
         if (_.options.centerMode === true) {
 
@@ -21030,78 +20871,36 @@ return jQuery;
             if (_.options.infinite === true) {
 
                 if (index >= centerOffset && index <= (_.slideCount - 1) - centerOffset) {
-
-                    _.$slides
-                        .slice(index - centerOffset, index + centerOffset + 1)
-                        .addClass('slick-active')
-                        .attr('aria-hidden', 'false');
-
+                    _.$slides.slice(index - centerOffset, index + centerOffset + 1).addClass('slick-active').attr('aria-hidden', 'false');
                 } else {
-
                     indexOffset = _.options.slidesToShow + index;
-                    allSlides
-                        .slice(indexOffset - centerOffset + 1, indexOffset + centerOffset + 2)
-                        .addClass('slick-active')
-                        .attr('aria-hidden', 'false');
-
+                    allSlides.slice(indexOffset - centerOffset + 1, indexOffset + centerOffset + 2).addClass('slick-active').attr('aria-hidden', 'false');
                 }
 
                 if (index === 0) {
-
-                    allSlides
-                        .eq(allSlides.length - 1 - _.options.slidesToShow)
-                        .addClass('slick-center');
-
+                    allSlides.eq(allSlides.length - 1 - _.options.slidesToShow).addClass('slick-center');
                 } else if (index === _.slideCount - 1) {
-
-                    allSlides
-                        .eq(_.options.slidesToShow)
-                        .addClass('slick-center');
-
+                    allSlides.eq(_.options.slidesToShow).addClass('slick-center');
                 }
 
             }
 
-            _.$slides
-                .eq(index)
-                .addClass('slick-center');
+            _.$slides.eq(index).addClass('slick-center');
 
         } else {
 
             if (index >= 0 && index <= (_.slideCount - _.options.slidesToShow)) {
-
-                _.$slides
-                    .slice(index, index + _.options.slidesToShow)
-                    .addClass('slick-active')
-                    .attr('aria-hidden', 'false');
-
+                _.$slides.slice(index, index + _.options.slidesToShow).addClass('slick-active').attr('aria-hidden', 'false');
             } else if (allSlides.length <= _.options.slidesToShow) {
-
-                allSlides
-                    .addClass('slick-active')
-                    .attr('aria-hidden', 'false');
-
+                allSlides.addClass('slick-active').attr('aria-hidden', 'false');
             } else {
-
                 remainder = _.slideCount % _.options.slidesToShow;
                 indexOffset = _.options.infinite === true ? _.options.slidesToShow + index : index;
-
                 if (_.options.slidesToShow == _.options.slidesToScroll && (_.slideCount - index) < _.options.slidesToShow) {
-
-                    allSlides
-                        .slice(indexOffset - (_.options.slidesToShow - remainder), indexOffset + remainder)
-                        .addClass('slick-active')
-                        .attr('aria-hidden', 'false');
-
+                    allSlides.slice(indexOffset - (_.options.slidesToShow - remainder), indexOffset + remainder).addClass('slick-active').attr('aria-hidden', 'false');
                 } else {
-
-                    allSlides
-                        .slice(indexOffset, indexOffset + _.options.slidesToShow)
-                        .addClass('slick-active')
-                        .attr('aria-hidden', 'false');
-
+                    allSlides.slice(indexOffset, indexOffset + _.options.slidesToShow).addClass('slick-active').attr('aria-hidden', 'false');
                 }
-
             }
 
         }
@@ -21174,23 +20973,24 @@ return jQuery;
 
         var _ = this;
 
-        var targetElement =
-            $(event.target).is('.slick-slide') ?
-                $(event.target) :
-                $(event.target).parents('.slick-slide');
+        var targetElement = $(event.target).is('.slick-slide') ?
+            $(event.target) :
+            $(event.target).parents('.slick-slide');
 
         var index = parseInt(targetElement.attr('data-slick-index'));
 
         if (!index) index = 0;
 
         if (_.slideCount <= _.options.slidesToShow) {
-
-            _.setSlideClasses(index);
+            _.$slider.find('.slick-slide').removeClass('slick-active').attr('aria-hidden', 'true');
+            _.$slides.eq(index).addClass('slick-active').attr("aria-hidden", "false");
+            if (_.options.centerMode === true) {
+                _.$slider.find('.slick-slide').removeClass('slick-center');
+                _.$slides.eq(index).addClass('slick-center');
+            }
             _.asNavFor(index);
             return;
-
         }
-
         _.slideHandler(index);
 
     };
@@ -21272,7 +21072,7 @@ return jQuery;
 
         _.animating = true;
 
-        _.$slider.trigger('beforeChange', [_, _.currentSlide, animSlide]);
+        _.$slider.trigger("beforeChange", [_, _.currentSlide, animSlide]);
 
         oldSlide = _.currentSlide;
         _.currentSlide = animSlide;
@@ -21284,13 +21084,9 @@ return jQuery;
 
         if (_.options.fade === true) {
             if (dontAnimate !== true) {
-
-                _.fadeSlideOut(oldSlide);
-
                 _.fadeSlide(animSlide, function() {
                     _.postSlide(animSlide);
                 });
-
             } else {
                 _.postSlide(animSlide);
             }
@@ -21377,7 +21173,7 @@ return jQuery;
         }
 
         if (_.touchObject.edgeHit === true) {
-            _.$slider.trigger('edge', [_, _.swipeDirection()]);
+            _.$slider.trigger("edge", [_, _.swipeDirection()]);
         }
 
         if (_.touchObject.swipeLength >= _.touchObject.minSwipe) {
@@ -21388,7 +21184,7 @@ return jQuery;
                     _.slideHandler(slideCount);
                     _.currentDirection = 0;
                     _.touchObject = {};
-                    _.$slider.trigger('swipe', [_, 'left']);
+                    _.$slider.trigger("swipe", [_, "left"]);
                     break;
 
                 case 'right':
@@ -21396,7 +21192,7 @@ return jQuery;
                     _.slideHandler(slideCount);
                     _.currentDirection = 1;
                     _.touchObject = {};
-                    _.$slider.trigger('swipe', [_, 'right']);
+                    _.$slider.trigger("swipe", [_, "right"]);
                     break;
             }
         } else {
@@ -21493,7 +21289,7 @@ return jQuery;
         _.touchObject.edgeHit = false;
 
         if (_.options.infinite === false) {
-            if ((_.currentSlide === 0 && swipeDirection === 'right') || (_.currentSlide >= _.getDotCount() && swipeDirection === 'left')) {
+            if ((_.currentSlide === 0 && swipeDirection === "right") || (_.currentSlide >= _.getDotCount() && swipeDirection === "left")) {
                 swipeLength = _.touchObject.swipeLength * _.options.edgeFriction;
                 _.touchObject.edgeHit = true;
             }
@@ -21565,23 +21361,16 @@ return jQuery;
         var _ = this;
 
         $('.slick-cloned', _.$slider).remove();
-
         if (_.$dots) {
             _.$dots.remove();
         }
-
-        if (_.$prevArrow && _.htmlExpr.test(_.options.prevArrow)) {
+        if (_.$prevArrow && (typeof _.options.prevArrow !== 'object')) {
             _.$prevArrow.remove();
         }
-
-        if (_.$nextArrow && _.htmlExpr.test(_.options.nextArrow)) {
+        if (_.$nextArrow && (typeof _.options.nextArrow !== 'object')) {
             _.$nextArrow.remove();
         }
-
-        _.$slides
-            .removeClass('slick-slide slick-active slick-visible slick-current')
-            .attr('aria-hidden', 'true')
-            .css('width', '');
+        _.$slides.removeClass('slick-slide slick-active slick-visible').attr("aria-hidden", "true").css('width', '');
 
     };
 
@@ -21600,30 +21389,20 @@ return jQuery;
 
         centerOffset = Math.floor(_.options.slidesToShow / 2);
 
-        if ( _.options.arrows === true &&
-            _.slideCount > _.options.slidesToShow &&
-            !_.options.infinite ) {
-
-            _.$prevArrow.removeClass('slick-disabled').attr('aria-disabled', 'false');
-            _.$nextArrow.removeClass('slick-disabled').attr('aria-disabled', 'false');
-
+        if (_.options.arrows === true && _.options.infinite !==
+            true && _.slideCount > _.options.slidesToShow) {
+            _.$prevArrow.removeClass('slick-disabled');
+            _.$nextArrow.removeClass('slick-disabled');
             if (_.currentSlide === 0) {
-
-                _.$prevArrow.addClass('slick-disabled').attr('aria-disabled', 'true');
-                _.$nextArrow.removeClass('slick-disabled').attr('aria-disabled', 'false');
-
+                _.$prevArrow.addClass('slick-disabled');
+                _.$nextArrow.removeClass('slick-disabled');
             } else if (_.currentSlide >= _.slideCount - _.options.slidesToShow && _.options.centerMode === false) {
-
-                _.$nextArrow.addClass('slick-disabled').attr('aria-disabled', 'true');
-                _.$prevArrow.removeClass('slick-disabled').attr('aria-disabled', 'false');
-
+                _.$nextArrow.addClass('slick-disabled');
+                _.$prevArrow.removeClass('slick-disabled');
             } else if (_.currentSlide >= _.slideCount - 1 && _.options.centerMode === true) {
-
-                _.$nextArrow.addClass('slick-disabled').attr('aria-disabled', 'true');
-                _.$prevArrow.removeClass('slick-disabled').attr('aria-disabled', 'false');
-
+                _.$nextArrow.addClass('slick-disabled');
+                _.$prevArrow.removeClass('slick-disabled');
             }
-
         }
 
     };
@@ -21634,16 +21413,8 @@ return jQuery;
 
         if (_.$dots !== null) {
 
-            _.$dots
-                .find('li')
-                .removeClass('slick-active')
-                .attr('aria-hidden', 'true');
-
-            _.$dots
-                .find('li')
-                .eq(Math.floor(_.currentSlide / _.options.slidesToScroll))
-                .addClass('slick-active')
-                .attr('aria-hidden', 'false');
+            _.$dots.find('li').removeClass('slick-active').attr("aria-hidden", "true");
+            _.$dots.find('li').eq(Math.floor(_.currentSlide / _.options.slidesToScroll)).addClass('slick-active').attr("aria-hidden", "false");
 
         }
 
@@ -21663,75 +21434,6 @@ return jQuery;
             }
         }
 
-    };
-    Slick.prototype.initADA = function() {
-        var _ = this;
-        _.$slides.add(_.$slideTrack.find('.slick-cloned')).attr({
-            'aria-hidden': 'true',
-            'tabindex': '-1'
-        }).find('a, input, button, select').attr({
-            'tabindex': '-1'
-        });
-
-        _.$slideTrack.attr('role', 'listbox');
-
-        _.$slides.not(_.$slideTrack.find('.slick-cloned')).each(function(i) {
-            $(this).attr({
-                'role': 'option',
-                'aria-describedby': 'slick-slide' + _.instanceUid + i + ''
-            });
-        });
-
-        if (_.$dots !== null) {
-            _.$dots.attr('role', 'tablist').find('li').each(function(i) {
-                $(this).attr({
-                    'role': 'presentation',
-                    'aria-selected': 'false',
-                    'aria-controls': 'navigation' + _.instanceUid + i + '',
-                    'id': 'slick-slide' + _.instanceUid + i + ''
-                });
-            })
-                .first().attr('aria-selected', 'true').end()
-                .find('button').attr('role', 'button').end()
-                .closest('div').attr('role', 'toolbar');
-        }
-        _.activateADA();
-
-    };
-
-    Slick.prototype.activateADA = function() {
-        var _ = this,
-        _isSlideOnFocus =_.$slider.find('*').is(':focus');
-        // _isSlideOnFocus = _.$slides.is(':focus') || _.$slides.find('*').is(':focus');
-
-        _.$slideTrack.find('.slick-active').attr({
-            'aria-hidden': 'false',
-            'tabindex': '0'
-        }).find('a, input, button, select').attr({
-            'tabindex': '0'
-        });
-
-        (_isSlideOnFocus) &&  _.$slideTrack.find('.slick-active').focus();
-
-    };
-
-    Slick.prototype.focusHandler = function() {
-        var _ = this;
-        _.$slider.on('focus.slick blur.slick', '*', function(event) {
-            event.stopImmediatePropagation();
-            var sf = $(this);
-            setTimeout(function() {
-                if (_.isPlay) {
-                    if (sf.is(':focus')) {
-                        _.autoPlayClear();
-                        _.paused = true;
-                    } else {
-                        _.paused = false;
-                        _.autoPlay();
-                    }
-                }
-            }, 0);
-        });
     };
 
     $.fn.slick = function() {
