@@ -83,13 +83,22 @@ module.exports = function(grunt) {
 
     // Compiles Sass to CSS and generates necessary files if requested
     sass: {
-      compile: {
-        options: {
-          bundleExec: true,
-          style: 'expanded',
-          loadPath: ['./bower_components/foundation/scss'],
-          sourcemap: 'none'
-        },
+      // compile: {
+      //   options: {
+      //     bundleExec: true,
+      //     style: 'expanded',
+      //     loadPath: ['./bower_components/foundation/scss'],
+      //     sourcemap: 'none'
+      //   },
+      //   files: {
+      //     '.tmp/styles/main.css': '<%= config.app %>/styles/main.scss'
+      //   }
+      // }
+      options: {
+        sourceMap: true,
+        includePaths: ['./bower_components/foundation/scss'],
+      },
+      dist: {
         files: {
           '.tmp/styles/main.css': '<%= config.app %>/styles/main.scss'
         }

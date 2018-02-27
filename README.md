@@ -4,20 +4,13 @@ A landing page for World Resources Watch
 
 ## Requeriments
 
-  * Node 0.10+
-  * sass 3.4.14
+  * Node 8.9.4+
   
 
 Install global dependencies:
 
   ```  bash
   npm install -g grunt-cli bower
-  ```
-
-Install gems:
-
-  ```  bash
-  bundle install
   ```
 
 
@@ -43,10 +36,17 @@ For JS files:
 
 Go to [http://localhost:5000](http://localhost:5000 "localhost") and have fun! :grin:
 
+## Build
+
+  ```bash
+  npm run build
+  ```
+
+
 ## Deploying
 
 Deploy to gh-pages:
   
   ```bash
-  grunt deploy
+  npm run deploy
   ```
