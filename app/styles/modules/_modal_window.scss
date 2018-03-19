@@ -1,5 +1,6 @@
 #modal-join {
-  width: 640px;
+    width: 640px;
+    min-height: 400px;
   position: fixed;
   margin: 0px;
   top: 50% !important;
@@ -8,7 +9,7 @@
 
   @media only screen and (min-width: 1280px) {
     width: 700px;
-    padding: 40px 0px;
+    padding: 40px;
   }
 
   #mc_embed_signup {
