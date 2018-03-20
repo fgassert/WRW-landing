@@ -35,7 +35,7 @@ var RocketLauncher = Class.extend({
   checkPosition: function() {
     var bodyYOffset = this.getScroll(),
       $menu = $('.menu'),
-      limitShow = $('.signals').offset().top;
+      limitShow = $('.launch').offset().top;
 
     var showMenu = function() {
       $menu.removeClass('unrevealed');

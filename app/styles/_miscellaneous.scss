@@ -26,6 +26,14 @@
       background: darken($blue, 10%);
     }
   }
+  &.white {
+      background: white;
+      background-image: none;
+      color: $light-black;
+      &:hover {
+          background: darken(white, 10%);
+      }
+  }
 }
 
 li, a, img {

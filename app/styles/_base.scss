@@ -16,6 +16,15 @@ body {
       max-width: $max-width-size;
       min-width: $min-width-size;
     }
+    &.launch {
+        background-color: $blue;
+        text-align: center;
+        padding: 20px 0;
+        color: white;
+        .launch-button {
+            padding-left: 75px;
+        }
+    }
     &.introduction {
       background-color: $black;
     }
